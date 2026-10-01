@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# FastF1 HTTP cache and generated datasets
+data/cache/*
+!data/cache/.gitkeep
+*.parquet
+data/processed/
+CLAUDE.md

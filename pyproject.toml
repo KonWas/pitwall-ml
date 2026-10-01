@@ -1,0 +1,21 @@
+[project]
+name = "pitwall-ml"
+version = "0.1.0"
+description = "F1 Telemetry & Strategy ML Engine"
+requires-python = ">=3.11"
+dependencies = [
+    "fastf1>=3.8",
+    "pandas>=2.2",
+    "polars>=1.0",
+    "pyarrow>=15",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+markers = [
+    "network: test downloads data from the F1 live timing API (deselect with -m 'not network')",
+]
