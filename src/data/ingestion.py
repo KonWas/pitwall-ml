@@ -96,7 +96,7 @@ def load_session(
         cache_dir: FastF1 cache directory.
 
     Returns:
-        A loaded ``fastf1.core.Session``.
+        A loaded `fastf1.core.Session`.
     """
     enable_cache(cache_dir)
     session = fastf1.get_session(year, event, session_type)
@@ -109,24 +109,24 @@ def get_laps(session: Session) -> pd.DataFrame:
     Extract the lap timing table from a loaded session as a plain DataFrame.
 
     Args:
-        session: A session already loaded via :func:`load_session`.
+        session: A session already loaded via `load_session()`.
 
     Returns:
-        One row per driver-lap, restricted to :data:`LAP_COLUMNS`.
+        One row per driver-lap, restricted to `LAP_COLUMNS`.
     """
     return pd.DataFrame(session.laps)[LAP_COLUMNS].reset_index(drop=True)
 
 
 def get_weather(session: Session) -> pd.DataFrame:
     """
-    Extract the weather table from a session loaded with ``weather=True``.
+    Extract the weather table from a session loaded with `weather=True`.
 
     Args:
-        session: A session already loaded via :func:`load_session`.
+        session: A session already loaded via `load_session()`.
 
     Returns:
-        One row per weather sample (~1/min). ``Time`` is session time
-        (timedelta), the same clock as ``LapStartTime`` in the lap table.
+        One row per weather sample (~1/min). `Time` is session time
+        (timedelta), the same clock as `LapStartTime` in the lap table.
     """
     return pd.DataFrame(session.weather_data).reset_index(drop=True)
 
@@ -136,12 +136,12 @@ def filter_clean_laps(laps: pd.DataFrame) -> pd.DataFrame:
     Remove laps that don't represent true racing pace.
 
     A lap is dropped if any of the following hold:
-        * It is a pit-in lap   (``PitInTime`` is set).
-        * It is a pit-out lap  (``PitOutTime`` is set).
-        * It has no recorded lap time (``LapTime`` is NaT).
+        * It is a pit-in lap   (`PitInTime` is set).
+        * It is a pit-out lap  (`PitOutTime` is set).
+        * It has no recorded lap time (`LapTime` is NaT).
 
     Args:
-        laps: Lap table as returned by :func:`get_laps`.
+        laps: Lap table as returned by `get_laps()`.
 
     Returns:
         A new DataFrame containing only clean laps, with a fresh 0..n-1 index.
@@ -163,18 +163,18 @@ def merge_weather(
     """
     Attach to each lap the most recent weather sample taken at or before its start.
 
-    Laps are matched on ``LapStartTime`` (laps) <-> ``Time`` (weather). A lap
-    whose latest earlier sample is more than ``tolerance`` old gets NaN weather.
+    Laps are matched on `LapStartTime` (laps) <-> `Time` (weather). A lap
+    whose latest earlier sample is more than `tolerance` old gets NaN weather.
     Weather recorded *after* a lap started must never be used (no lookahead).
 
     Args:
-        laps: Lap table as returned by :func:`get_laps` (any row order).
-        weather: Weather table as returned by :func:`get_weather` (any row order).
+        laps: Lap table as returned by `get_laps()` (any row order).
+        weather: Weather table as returned by `get_weather()` (any row order).
         tolerance: Maximum allowed age of the matched weather sample.
 
     Returns:
         A new DataFrame with one row per input lap: all lap columns plus every
-        weather column except ``Time``. Sorted by ``Driver`` then ``LapNumber``,
+        weather column except `Time`. Sorted by `Driver` then `LapNumber`,
         with a fresh 0..n-1 index. Inputs must not be modified.
     """
     mask = laps["LapStartTime"].notna()
@@ -198,15 +198,15 @@ def merge_weather(
 
 def save_laps_parquet(laps: pd.DataFrame, path: Path | str) -> Path:
     """
-    Cast a lap table to :data:`LAPS_DTYPES` and write it to a Parquet file.
+    Cast a lap table to `LAPS_DTYPES` and write it to a Parquet file.
 
-    Only the ``LAPS_DTYPES`` entries whose column exists in ``laps`` are applied,
-    so this works both before and after :func:`merge_weather`. Parent
+    Only the `LAPS_DTYPES` entries whose column exists in `laps` are applied,
+    so this works both before and after `merge_weather()`. Parent
     directories are created if missing. The index is not stored.
 
     Args:
         laps: Lap table (optionally with weather columns).
-        path: Destination ``.parquet`` file.
+        path: Destination `.parquet` file.
 
     Returns:
         The path written to.
@@ -221,10 +221,10 @@ def save_laps_parquet(laps: pd.DataFrame, path: Path | str) -> Path:
 
 def load_laps_parquet(path: Path | str) -> pd.DataFrame:
     """
-    Read a lap table written by :func:`save_laps_parquet`.
+    Read a lap table written by `save_laps_parquet()`.
 
     Args:
-        path: Source ``.parquet`` file.
+        path: Source `.parquet` file.
 
     Returns:
         The lap table with the dtypes it was saved with.
@@ -236,8 +236,8 @@ def dataset_path(
     year: int, event_name: str, session_type: str, out_dir: Path | str = PROCESSED_DIR
 ) -> Path:
     """
-    File path for a session dataset: ``"Saudi Arabian Grand Prix"`` ->
-    ``<out_dir>/2023_saudi_arabian_R.parquet``. Accents are stripped (São Paulo -> sao_paulo).
+    File path for a session dataset: `"Saudi Arabian Grand Prix"` ->
+    `<out_dir>/2023_saudi_arabian_R.parquet`. Accents are stripped (São Paulo -> sao_paulo).
     """
     ascii_name = unicodedata.normalize("NFKD", event_name).encode("ascii", "ignore").decode()
     slug = ascii_name.lower().replace(" grand prix", "").replace(" ", "_")
@@ -262,7 +262,7 @@ def build_lap_dataset(
         out_dir: Directory for the output file.
 
     Returns:
-        Path of the written file, e.g. ``data/processed/2023_bahrain_R.parquet``.
+        Path of the written file, e.g. `data/processed/2023_bahrain_R.parquet`.
     """
     session = load_session(year, event, session_type, weather=True)
     merged = merge_weather(get_laps(session), get_weather(session))

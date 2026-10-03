@@ -26,9 +26,9 @@ def build_season(
     overwrite: bool = False,
 ) -> list[Path]:
     """
-    Run :func:`build_lap_dataset` for every event of a season.
+    Run `build_lap_dataset()` for every event of a season.
 
-    Events whose file already exists are skipped unless ``overwrite`` is set.
+    Events whose file already exists are skipped unless `overwrite` is set.
     An event that fails (e.g. data not published, cancelled race) is logged
     and skipped, so one bad weekend doesn't abort the whole season.
 
@@ -59,17 +59,17 @@ def build_season(
 
 def scan_laps(data_dir: Path | str = PROCESSED_DIR) -> pl.LazyFrame:
     """
-    Lazily scan every lap dataset in ``data_dir`` as one table.
+    Lazily scan every lap dataset in `data_dir` as one table.
 
     Nothing is read from disk here: the result is a query plan that runs on
-    ``.collect()``. ``Year``, ``Event`` and ``Session`` columns are derived
+    `.collect()`. `Year`, `Event` and `Session` columns are derived
     from each row's source filename.
 
     Args:
-        data_dir: Directory containing files written by :func:`dataset_path`.
+        data_dir: Directory containing files written by `dataset_path()`.
 
     Returns:
-        A ``pl.LazyFrame`` over all files.
+        A `pl.LazyFrame` over all files.
     """
     return (
         pl.scan_parquet(Path(data_dir) / "*.parquet", include_file_paths="SourceFile")
@@ -87,18 +87,18 @@ def compound_pace_summary(laps: pl.LazyFrame) -> pl.DataFrame:
     Median green-flag racing pace per event and tyre compound.
 
     A lap counts only if it is a clean racing lap under green flag:
-    ``PitInTime`` and ``PitOutTime`` are null, ``LapTime`` is not null, and
-    ``TrackStatus == "1"`` (green for the whole lap).
+    `PitInTime` and `PitOutTime` are null, `LapTime` is not null, and
+    `TrackStatus == "1"` (green for the whole lap).
 
     Args:
-        laps: Lazy lap table as returned by :func:`scan_laps`.
+        laps: Lazy lap table as returned by `scan_laps()`.
 
     Returns:
         One row per (Event, Compound) with columns:
-            * ``Event`` (String), ``Compound`` (String)
-            * ``Laps`` (UInt32): number of qualifying laps
-            * ``MedianLapTime_s`` (Float64): median lap time in seconds
-        Sorted by ``Event`` then ``Compound``.
+            * `Event` (String), `Compound` (String)
+            * `Laps` (UInt32): number of qualifying laps
+            * `MedianLapTime_s` (Float64): median lap time in seconds
+        Sorted by `Event` then `Compound`.
     """
     filtered = laps.filter(
         pl.col("PitInTime").is_null(),
