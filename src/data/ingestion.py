@@ -232,6 +232,12 @@ def load_laps_parquet(path: Path | str) -> pd.DataFrame:
     return pd.read_parquet(path, engine="pyarrow")
 
 
+def event_slug(event_name: str) -> str:
+    """``"São Paulo Grand Prix"`` -> ``"sao_paulo"`` (ASCII, lowercase, underscores)."""
+    ascii_name = unicodedata.normalize("NFKD", event_name).encode("ascii", "ignore").decode()
+    return ascii_name.lower().replace(" grand prix", "").replace(" ", "_")
+
+
 def dataset_path(
     year: int, event_name: str, session_type: str, out_dir: Path | str = PROCESSED_DIR
 ) -> Path:
@@ -239,9 +245,7 @@ def dataset_path(
     File path for a session dataset: `"Saudi Arabian Grand Prix"` ->
     `<out_dir>/2023_saudi_arabian_R.parquet`. Accents are stripped (São Paulo -> sao_paulo).
     """
-    ascii_name = unicodedata.normalize("NFKD", event_name).encode("ascii", "ignore").decode()
-    slug = ascii_name.lower().replace(" grand prix", "").replace(" ", "_")
-    return Path(out_dir) / f"{year}_{slug}_{session_type}.parquet"
+    return Path(out_dir) / f"{year}_{event_slug(event_name)}_{session_type}.parquet"
 
 
 def build_lap_dataset(

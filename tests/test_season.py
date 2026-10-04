@@ -123,3 +123,20 @@ def test_compound_pace_summary_on_real_data(tmp_path: Path) -> None:
     assert set(out["Compound"]) <= {"SOFT", "MEDIUM", "HARD", "INTERMEDIATE", "WET"}
     assert out["Laps"].sum() > 500
     assert out["MedianLapTime_s"].is_between(90, 105).all()
+
+
+# --- season_calendar (no network: schedule is faked) ------------------------------
+
+def test_season_calendar_orders_by_round(monkeypatch: pytest.MonkeyPatch) -> None:
+    schedule = pd.DataFrame(
+        {
+            "RoundNumber": [2, 1, 3],
+            "EventName": ["Saudi Arabian Grand Prix", "Bahrain Grand Prix", "São Paulo Grand Prix"],
+            "EventDate": pd.to_datetime(["2023-03-19", "2023-03-05", "2023-11-05"]),
+        }
+    )
+    monkeypatch.setattr(season, "enable_cache", lambda: None)
+    monkeypatch.setattr(season.fastf1, "get_event_schedule", lambda year, include_testing: schedule)
+    cal = season.season_calendar(2023)
+    assert cal["RaceId"].tolist() == ["2023_bahrain", "2023_saudi_arabian", "2023_sao_paulo"]
+    assert cal["RoundNumber"].tolist() == [1, 2, 3]

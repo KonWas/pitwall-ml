@@ -8,9 +8,16 @@ import logging
 from pathlib import Path
 
 import fastf1
+import pandas as pd
 import polars as pl
 
-from src.data.ingestion import PROCESSED_DIR, build_lap_dataset, dataset_path, enable_cache
+from src.data.ingestion import (
+    PROCESSED_DIR,
+    build_lap_dataset,
+    dataset_path,
+    enable_cache,
+    event_slug,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +62,35 @@ def build_season(
         except Exception:
             logger.exception("Failed to build %s %s %s", year, event["EventName"], session_type)
     return paths
+
+
+def season_calendar(year: int) -> pd.DataFrame:
+    """
+    Chronological race calendar of a season, keyed like the feature tables.
+
+    ``RaceId`` strings ("2023_bahrain") sort alphabetically, not by date, so any
+    time-ordered split must use ``RoundNumber`` from this table instead.
+
+    Args:
+        year: Championship season (served from the FastF1 cache after first use).
+
+    Returns:
+        Columns ``RaceId`` (str), ``RoundNumber`` (int), ``EventDate`` (datetime64),
+        one row per event, sorted by ``RoundNumber``.
+    """
+    enable_cache()
+    schedule = fastf1.get_event_schedule(year, include_testing=False)
+    return (
+        pd.DataFrame(
+            {
+                "RaceId": [f"{year}_{event_slug(name)}" for name in schedule["EventName"]],
+                "RoundNumber": schedule["RoundNumber"].astype(int).to_numpy(),
+                "EventDate": pd.to_datetime(schedule["EventDate"]).to_numpy(),
+            }
+        )
+        .sort_values("RoundNumber")
+        .reset_index(drop=True)
+    )
 
 
 def scan_laps(data_dir: Path | str = PROCESSED_DIR) -> pl.LazyFrame:

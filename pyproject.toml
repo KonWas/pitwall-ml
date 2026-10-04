@@ -4,11 +4,15 @@ version = "0.1.0"
 description = "F1 Telemetry & Strategy ML Engine"
 requires-python = ">=3.11"
 dependencies = [
+    "catboost>=1.2",
     "fastf1>=3.8",
+    "mapie>=1.0",
     "numpy>=1.26",
     "pandas>=2.2",
     "polars>=1.0",
     "pyarrow>=15",
+    "scikit-learn>=1.5",
+    "torch>=2.4",
 ]
 
 [project.optional-dependencies]
