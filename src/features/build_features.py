@@ -292,6 +292,56 @@ def micro_sector_deltas(
     return (lap_durations - ref_durations).astype("float64")
 
 
+def non_representative_laps(laps: pd.DataFrame) -> pd.Series:
+    """
+    Flag laps that are real data but not representative racing pace.
+
+    A lap is flagged (True) if any of these hold:
+        * **Race start**: ``LapNumber == 1``. Standing start from the grid,
+          several seconds slower than any racing lap.
+        * **Red-flag restart**: the first non-pit lap of a driver after a lap
+          whose ``TrackStatus`` contains "5" (red flag). The restart is another
+          standing start, but FastF1 marks the lap green ("1"), so the green-flag
+          filter keeps it. The laps in between (stopped in the pit lane) are pit
+          laps and are already removed by ``filter_clean_laps``.
+        * **Rain**: ``Rainfall`` is True (weather sampled at the lap start).
+          Wet-track laps on slicks are a different pace regime.
+
+    Every rule uses information available when the lap starts (its lap number,
+    earlier laps' status, weather at the start), plus the lap's own pit flags and
+    TrackStatus - the same convention as ``filter_clean_laps`` and the green-flag
+    filter. A lap's own LapTime is never used, so this cannot select on the target.
+
+    Args:
+        laps: Full lap table of one race (ALL laps, including pit and red-flag
+            laps, which the restart rule needs as context). Missing ``Rainfall``
+            or ``TrackStatus`` values count as "no rain" / "not red".
+
+    Returns:
+        Boolean Series with the same index as ``laps``. Input not modified.
+    """
+    ordered = laps.sort_values(["Driver", "LapNumber"])
+    by_driver = ordered["Driver"]
+
+    status = ordered["TrackStatus"].astype("string")
+    red = status.str.contains("5", regex=False).fillna(False).astype(bool)
+    pit = ordered["PitInTime"].notna() | ordered["PitOutTime"].notna()
+    # Number of red-flag laps so far: each red flag opens a new "segment".
+    red_segment = red.astype(int).groupby(by_driver, observed=True).cumsum()
+    candidate = (red_segment > 0) & ~red & ~pit
+    nth_candidate = candidate.astype(int).groupby([by_driver, red_segment], observed=True).cumsum()
+    restart = candidate & (nth_candidate == 1)
+
+    race_start = ordered["LapNumber"] == 1
+    if "Rainfall" in ordered.columns:
+        rain = ordered["Rainfall"].astype("boolean").fillna(False).astype(bool)
+    else:
+        rain = pd.Series(False, index=ordered.index)
+
+    flagged = (race_start.fillna(False).astype(bool) | restart | rain).astype(bool)
+    return flagged.reindex(laps.index)
+
+
 def build_features(
     laps: pd.DataFrame,
     total_laps: int,
@@ -299,6 +349,7 @@ def build_features(
     window: int = 5,
     min_periods: int = 3,
     green_flag_only: bool = True,
+    exclude_non_representative: bool = True,
     fuel_effect_s_per_lap: float = FUEL_EFFECT_S_PER_LAP,
 ) -> pd.DataFrame:
     """
@@ -307,10 +358,14 @@ def build_features(
     Steps:
         1. Weather/context features on ALL laps (so a stint's start temperature
            is taken from its real first lap, even if that lap is later dropped).
-        2. Keep only clean laps (`filter_clean_laps`) and, optionally,
+        2. Optionally drop non-representative laps (`non_representative_laps`:
+           race start, red-flag restarts, rain). Flagged on ALL laps first,
+           because the restart rule needs the red-flag and pit laps as context.
+        3. Keep only clean laps (`filter_clean_laps`) and, optionally,
            green-flag laps (`TrackStatus == "1"`).
-        3. Target (`LapTime_s`), its fuel-corrected version, and lagged pace
-           / degradation features computed over the remaining laps.
+        4. Target (`LapTime_s`), its fuel-corrected version, and lagged pace
+           / degradation features computed over the remaining laps, so slow
+           non-representative laps never enter a rolling window.
 
     Args:
         laps: Lap table as returned by `src.data.ingestion.load_laps_parquet`.
@@ -318,6 +373,7 @@ def build_features(
         window: Rolling window (laps) for pace and degradation features.
         min_periods: Minimum previous laps for the degradation index.
         green_flag_only: Drop laps run under any yellow / SC / VSC / red status.
+        exclude_non_representative: Drop laps flagged by `non_representative_laps`.
         fuel_effect_s_per_lap: Fuel effect used for the correction.
 
     Returns:
@@ -331,6 +387,8 @@ def build_features(
     out["AirDensity_kgm3"] = air_density(out["AirTemp"], out["Pressure"], out["Humidity"])
     out["DownforceIndex"] = out["AirDensity_kgm3"] / RHO_ISA_KG_M3
 
+    if exclude_non_representative:
+        out = out.loc[~non_representative_laps(out)]
     out = filter_clean_laps(out)
     if green_flag_only:
         # TrackStatus is nullable "string": <NA> == "1" is <NA>, treat as not green.

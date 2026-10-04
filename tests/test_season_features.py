@@ -88,7 +88,7 @@ def test_infer_total_laps_rejects_tables_without_laps(lap_numbers) -> None:
 
 def test_stacks_races_with_race_columns(race_files: list[Path]) -> None:
     f = build_features_for_files(race_files)
-    assert len(f) == 2 * 10 + 2 * 8
+    assert len(f) == 2 * 9 + 2 * 7  # lap 1 (standing start) dropped for every driver
     assert f["RaceId"].unique().tolist() == ["2023_bahrain", "2023_saudi_arabian"]
     assert set(f["Year"]) == {2023}
     assert set(f["Event"]) == {"bahrain", "saudi_arabian"}
@@ -100,7 +100,7 @@ def test_sorted_by_race_driver_lap(race_files: list[Path]) -> None:
     f = build_features_for_files(race_files[::-1])  # input order must not matter
     expected = f.sort_values(["RaceId", "Driver", "LapNumber"]).reset_index(drop=True)
     pd.testing.assert_frame_equal(f, expected)
-    assert f["Driver"].astype(str).tolist()[:11] == ["HAM"] * 10 + ["VER"]
+    assert f["Driver"].astype(str).tolist()[:10] == ["HAM"] * 9 + ["VER"]
 
 
 def test_categorical_columns_survive_concat(race_files: list[Path]) -> None:
@@ -130,9 +130,9 @@ def test_no_leakage_across_races(race_files: list[Path]) -> None:
 def test_total_laps_override(race_files: list[Path]) -> None:
     default = build_features_for_files(race_files)
     overridden = build_features_for_files(race_files, total_laps={"2023_bahrain": 20})
-    bahrain_lap1 = (overridden["RaceId"] == "2023_bahrain") & (overridden["LapNumber"] == 1)
-    expected = 95.1 - FUEL_EFFECT_S_PER_LAP * (20 - 1)
-    assert overridden.loc[bahrain_lap1, "FuelCorrectedLapTime_s"].tolist() == pytest.approx([expected] * 2)
+    bahrain_lap2 = (overridden["RaceId"] == "2023_bahrain") & (overridden["LapNumber"] == 2)
+    expected = 95.2 - FUEL_EFFECT_S_PER_LAP * (20 - 2)
+    assert overridden.loc[bahrain_lap2, "FuelCorrectedLapTime_s"].tolist() == pytest.approx([expected] * 2)
     # The other race keeps its inferred distance.
     saudi = default["RaceId"] == "2023_saudi_arabian"
     np.testing.assert_allclose(
@@ -152,7 +152,7 @@ def test_build_season_features_writes_parquet(race_files: list[Path], tmp_path: 
     out = build_season_features(tmp_path, tmp_path / "out" / "features.parquet")
     assert out.is_file()
     loaded = pd.read_parquet(out)
-    assert len(loaded) == 36
+    assert len(loaded) == 32
     assert isinstance(loaded["Driver"].dtype, pd.CategoricalDtype)
 
 

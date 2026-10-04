@@ -74,6 +74,7 @@ def build_features_for_files(
     window: int = 5,
     min_periods: int = 3,
     green_flag_only: bool = True,
+    exclude_non_representative: bool = True,
 ) -> pd.DataFrame:
     """
     Build features for each race file separately, then stack them into one table.
@@ -91,6 +92,7 @@ def build_features_for_files(
         window: Passed to build_features.
         min_periods: Passed to build_features.
         green_flag_only: Passed to build_features.
+        exclude_non_representative: Passed to build_features.
 
     Returns:
         One DataFrame with all races, sorted by RaceId, Driver, LapNumber, with a
@@ -114,6 +116,7 @@ def build_features_for_files(
             window=window,
             min_periods=min_periods,
             green_flag_only=green_flag_only,
+            exclude_non_representative=exclude_non_representative,
         ).assign(Year=year, Event=event, Session=session, RaceId=race_id)
         frames.append(features)
     result = pd.concat(frames, ignore_index=True)
@@ -132,6 +135,7 @@ def build_season_features(
     window: int = 5,
     min_periods: int = 3,
     green_flag_only: bool = True,
+    exclude_non_representative: bool = True,
 ) -> Path:
     """
     Build features for every `session_type` file in data_dir and write one Parquet file.
@@ -146,6 +150,7 @@ def build_season_features(
         window: Passed to build_features.
         min_periods: Passed to build_features.
         green_flag_only: Passed to build_features.
+        exclude_non_representative: Passed to build_features.
 
     Returns:
         The path written to.
@@ -162,6 +167,7 @@ def build_season_features(
         window=window,
         min_periods=min_periods,
         green_flag_only=green_flag_only,
+        exclude_non_representative=exclude_non_representative,
     )
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)

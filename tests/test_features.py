@@ -16,6 +16,7 @@ from src.features.build_features import (
     fuel_corrected_lap_time,
     lagged_rolling_mean,
     micro_sector_deltas,
+    non_representative_laps,
     tire_degradation_index,
     track_temp_delta,
 )
@@ -286,7 +287,7 @@ def test_feature_columns_exclude_target() -> None:
 
 def test_build_features_output_shape(synthetic_race: pd.DataFrame) -> None:
     before = synthetic_race.copy()
-    features = build_features(synthetic_race, total_laps=TOTAL_LAPS)
+    features = build_features(synthetic_race, total_laps=TOTAL_LAPS, exclude_non_representative=False)
     pd.testing.assert_frame_equal(synthetic_race, before)
     assert set(FEATURE_COLUMNS) | {TARGET_COLUMN} <= set(features.columns)
     assert features.index.tolist() == list(range(len(features)))
@@ -298,12 +299,16 @@ def test_build_features_output_shape(synthetic_race: pd.DataFrame) -> None:
 
 
 def test_build_features_keeps_sc_laps_when_asked(synthetic_race: pd.DataFrame) -> None:
-    features = build_features(synthetic_race, total_laps=TOTAL_LAPS, green_flag_only=False)
+    features = build_features(
+        synthetic_race, total_laps=TOTAL_LAPS, green_flag_only=False, exclude_non_representative=False
+    )
     assert len(features) == 22
 
 
 def test_build_features_values(synthetic_race: pd.DataFrame) -> None:
-    f = build_features(synthetic_race, total_laps=TOTAL_LAPS, window=5, min_periods=3)
+    f = build_features(
+        synthetic_race, total_laps=TOTAL_LAPS, window=5, min_periods=3, exclude_non_representative=False
+    )
     assert _row(f, "VER", 1)[TARGET_COLUMN] == pytest.approx(90.3 + FUEL * 11)
     assert _row(f, "VER", 2)["RollingPace_s"] == pytest.approx(90.3)
     # Degradation per stint; never computed from another stint's laps.
@@ -344,3 +349,94 @@ def test_build_features_on_real_data() -> None:
     deg = f["TireDegIndex_s_per_lap"].dropna()
     assert len(deg) > 0.5 * len(f)
     assert -0.3 < deg.median() < 0.3
+
+
+# --- non_representative_laps ------------------------------------------------------
+
+def _status_frame(rows: list[tuple]) -> pd.DataFrame:
+    """rows: (Driver, LapNumber, TrackStatus, is_pit_lap, Rainfall)."""
+    driver, lap, status, pit, rain = zip(*rows)
+    return pd.DataFrame(
+        {
+            "Driver": list(driver),
+            "LapNumber": [float(x) for x in lap],
+            "LapTime": pd.to_timedelta([90.0] * len(rows), unit="s"),
+            "TrackStatus": pd.array(list(status), dtype="string"),
+            "PitInTime": pd.to_timedelta([10.0 if p else None for p in pit], unit="s"),
+            "PitOutTime": pd.to_timedelta([None] * len(rows), unit="s"),
+            "Rainfall": pd.array(list(rain), dtype="boolean"),
+        }
+    )
+
+
+def test_non_representative_flags_race_start() -> None:
+    laps = _status_frame([("VER", 1, "1", False, False), ("VER", 2, "1", False, False)])
+    assert non_representative_laps(laps).tolist() == [True, False]
+
+
+def test_non_representative_flags_first_lap_after_red_flag() -> None:
+    # Australia 2023 pattern: red flag on lap 8, lap 9 in the pit lane, lap 10 = restart.
+    laps = _status_frame(
+        [
+            ("HAM", 7, "124", False, False),
+            ("HAM", 8, "45", True, False),
+            ("HAM", 9, "1", True, False),
+            ("HAM", 10, "1", False, False),  # restart (standing start, marked green)
+            ("HAM", 11, "1", False, False),
+        ]
+    )
+    assert non_representative_laps(laps).tolist() == [False, False, False, True, False]
+
+
+def test_non_representative_restart_without_pit_lap_and_two_red_flags() -> None:
+    laps = _status_frame(
+        [
+            ("VER", 3, "5", False, False),
+            ("VER", 4, "1", False, False),  # restart directly after the red-flag lap
+            ("VER", 5, "1", False, False),
+            ("VER", 20, "45", False, False),  # second red flag
+            ("VER", 21, "1", True, False),
+            ("VER", 22, "1", False, False),  # second restart
+            ("VER", 23, "1", False, False),
+        ]
+    )
+    assert non_representative_laps(laps).tolist() == [False, True, False, False, False, True, False]
+
+
+def test_non_representative_is_per_driver_and_index_aligned() -> None:
+    laps = _status_frame(
+        [
+            ("VER", 2, "1", False, False),
+            ("HAM", 5, "5", False, False),
+            ("VER", 6, "1", False, False),  # VER never saw a red flag -> not a restart
+            ("HAM", 6, "1", False, False),  # HAM restart
+        ]
+    ).sample(frac=1.0, random_state=0)
+    flags = non_representative_laps(laps)
+    assert flags.index.equals(laps.index)
+    flagged = laps.loc[flags, ["Driver", "LapNumber"]].values.tolist()
+    assert flagged == [["HAM", 6.0]]
+
+
+def test_non_representative_flags_rain_and_tolerates_missing_values() -> None:
+    laps = _status_frame(
+        [("VER", 2, "1", False, True), ("VER", 3, None, False, None), ("VER", 4, "1", False, False)]
+    )
+    assert non_representative_laps(laps).tolist() == [True, False, False]
+    assert non_representative_laps(laps.drop(columns="Rainfall")).tolist() == [False, False, False]
+
+
+def test_non_representative_never_uses_lap_time() -> None:
+    laps = _status_frame([("HAM", 1, "1", False, False), ("HAM", 2, "5", False, False), ("HAM", 3, "1", False, False)])
+    slower = laps.assign(LapTime=laps["LapTime"] * 3)
+    pd.testing.assert_series_equal(non_representative_laps(laps), non_representative_laps(slower))
+
+
+def test_build_features_drops_non_representative_by_default(synthetic_race: pd.DataFrame) -> None:
+    f = build_features(synthetic_race, total_laps=TOTAL_LAPS)
+    assert not (f["LapNumber"] == 1).any()
+    assert len(f) == 19  # 21 clean green laps minus both lap-1 rows
+    # VER lap 2 is now the first lap of its stint in the table: no previous lap, no pace.
+    assert np.isnan(_row(f, "VER", 2)["RollingPace_s"])
+    assert _row(f, "VER", 3)["RollingPace_s"] == pytest.approx(90.4)  # lap 2 only (TyreLife 4)
+
