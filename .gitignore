@@ -4,6 +4,12 @@ __pycache__/
 .pytest_cache/
 *.egg-info/
 .ipynb_checkpoints/
+.vscode/
+
+# C++ build output (src/cpp)
+build/
+*.so
+*.pyd
 
 # FastF1 HTTP cache and generated datasets
 data/cache/*
@@ -11,4 +17,5 @@ data/cache/*
 *.parquet
 data/processed/
 data/features/
+data/models/
 CLAUDE.md

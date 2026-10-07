@@ -214,3 +214,31 @@ def race_params_from_data(
         sc_duration_laps=max(1, round(sc_duration_laps)) if not np.isnan(sc_duration_laps) else 4,
         **kwargs,
     )
+
+
+def reference_race() -> RaceParams:
+    """
+    Hand-set, Bahrain-like race with Pirelli-style tyre behaviour.
+
+    Race data cannot reliably identify compound pace: teams pick strategies that
+    make the compounds roughly equal, and drivers manage their tyres instead of
+    running at the limit (see notebook 04, section 7). So the C++ port and the RL
+    agent are developed on this clean, known race model, and the data-fitted
+    parameters stay as an honest measure of the sim-to-real gap.
+
+    SOFT is fastest when new and wears fastest, HARD the opposite; the best fixed
+    strategy is a MEDIUM-HARD one-stop, about 5 s ahead of the best two-stop.
+    """
+    return RaceParams(
+        total_laps=57,
+        base_lap_s=96.0,
+        tyres={
+            "SOFT": TyreModel(offset_s=-0.8, deg_s_per_lap=0.12),
+            "MEDIUM": TyreModel(offset_s=-0.4, deg_s_per_lap=0.075),
+            "HARD": TyreModel(offset_s=0.0, deg_s_per_lap=0.045),
+        },
+        pit_loss_s=22.5,
+        lap_noise_s=0.4,
+        sc_hazard_per_lap=0.0136,
+        sc_duration_laps=4,
+    )
